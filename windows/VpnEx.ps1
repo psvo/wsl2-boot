@@ -30,7 +30,7 @@ function Set-VpnToggle() {
 
   # Get connected VPN
   $vpnStrings = @("Cisco AnyConnect", "Juniper", "VPN")
-  $vpnNet = Get-NetAdapter | ? status -eq Up | Where {
+  $vpnNets = Get-NetAdapter | ? status -eq Up | Where {
     $found=$False
     Foreach($str in $vpnStrings) {
       if ($_.InterfaceDescription.contains($str)) {$found=$True;break}
@@ -39,7 +39,7 @@ function Set-VpnToggle() {
   }
 
   # > To adjust Mtu to VPN capability
-  $phyMtu = Get-NetAdapter -Physical | ? status -eq Up | Get-NetIPInterface -AddressFamily IPv4 | Select-Object -ExpandProperty NlMtu
+  $phyMtu = Get-NetAdapter -Physical | ? status -eq Up | Get-NetIPInterface -AddressFamily IPv4 | Select-Object -ExpandProperty NlMtu | Sort-Object | Select-Object -First 1
   $wslMtu = Get-NetIPInterface -InterfaceAlias "vEthernet ($Name)" -AddressFamily IPv4 | Get-NetIPInterface -AddressFamily IPv4 | Select-Object -ExpandProperty NlMtu
   Write-Debug "phyMtu=$phyMtu,wslMtu=$wslMtu"
 
@@ -50,14 +50,14 @@ function Set-VpnToggle() {
   Write-Debug "dnsIP=$dnsIP"
 
   # Different actions if or if not under VPN
-  if ($vpnNet) {
+  if ($vpnNets) {
     # Apply changes if using VPN
 
     # If WSL2 lost connectivity under VPN (not the case for me)
-    # $vpnNet | Set-NetIPInterface -InterfaceMetric 6000
+    # $vpnNets | Set-NetIPInterface -InterfaceMetric 6000
 
     # Adjust Mtu to VPN capability
-    $vpnMtu = $vpnNet | Get-NetIPInterface -AddressFamily IPv4 | Select-Object -ExpandProperty NlMtu
+    $vpnMtu = $vpnNets | Get-NetIPInterface -AddressFamily IPv4 | Select-Object -ExpandProperty NlMtu | Sort-Object | Select-Object -First 1
     if ($vpnMtu -lt $phyMtu -and $wslMtu -ne $vpnMtu) {
       Write-Host "Patching NetIPInterface ""vEthernet ($Name)"" with NlMtu=$vpnMtu ..."
       Get-NetIPInterface -InterfaceAlias "vEthernet ($Name)" | Set-NetIPInterface -NlMtu $vpnMtu
@@ -65,7 +65,7 @@ function Set-VpnToggle() {
     }
 
     # Patch DNS nameserver under VPN
-    $dnsIPs = $vpnNet | Get-DnsClientServerAddress -AddressFamily IPv4 | Select-Object -ExpandProperty ServerAddresses
+    $dnsIPs = $vpnNets | Get-DnsClientServerAddress -AddressFamily IPv4 | Select-Object -ExpandProperty ServerAddresses
     $dnsIP = $dnsIPs[0]
 
     # Patch DNS search under VPN
